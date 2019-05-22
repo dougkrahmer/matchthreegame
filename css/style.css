@@ -1,0 +1,118 @@
+body {
+    padding-left: 60px; /* give space for the side bar */
+}
+
+#gameArea table {
+    border-collapse: separate;
+    border-spacing: 1px;
+    background-color: #A0A0A0;
+}
+
+#gameArea td {
+    width: 32px;
+    max-width: 32px;
+    min-width: 32px;
+    height: 32px;
+}
+
+input[type="number"] {
+    width: 3em;
+}
+
+#gameSetup > div:not(:last-child) {
+    margin-bottom: 5px;
+}
+
+label {
+    font-weight: bold;
+}
+
+#controlsBlock {
+    position: fixed;
+    left: 0;
+    top: 0;
+    height: 100%;
+    width: 50px;
+
+    background-color: green;
+}
+
+#controlsBlock ul {
+    padding: 0;
+    margin: 50px 0 0;
+    list-style: none;
+}
+
+#controlsBlock li {
+    -webkit-box-sizing: border-box;
+    -moz-box-sizing: border-box;
+    box-sizing: border-box;
+    width: 100%;
+    padding: 8px;
+    height: 50px;
+    /*do this for absolute nested elements*/
+    position: relative;
+}
+
+#controlsBlock li:hover {
+    background-color: darkgreen;
+}
+
+#controlsBlock li:hover > .controlsExpand, .controlsExpand:hover {
+    display: block;
+}
+
+.controlsExpand {
+    position: absolute;
+    top: -16px;
+    left: 50px;
+    display: none;
+
+    width: 250px;
+
+    background-color: white;
+    padding: 16px 8px;
+    border: 1px solid green;
+    border-left: none;
+}
+
+.fRow {
+    margin-bottom: 5px;
+}
+
+.r {
+    background-color: red;
+}
+
+.o {
+    background-color: orange;
+}
+
+.y {
+    background-color: yellow;
+}
+
+.g {
+    background-color: green
+}
+
+.b {
+    background-color: blue;
+}
+
+.i {
+    background-color: rgb(34, 0, 155);
+}
+
+.v {
+    background-color: rgb(61, 0, 110);
+}
+
+.S {
+    border: 1px solid white;
+    box-sizing: border-box;
+}
+
+.n {
+    background-color: black;
+}

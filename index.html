@@ -1,0 +1,56 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Swap/Match-3</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/5.0.0/normalize.min.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <aside id="controlsBlock">
+        <ul>
+            <li>
+                <img src="img/new.png" alt="New" title="New">
+                <div class="controlsExpand">
+                    <div class="fRow">
+                        <button type="button" id="newEasy">Easy</button>
+                        <button type="button" id="newMed">Intermediate</button>
+                        <button type="button" id="newHard">Expert</button>
+                    </div>
+                    <hr>
+                    <div class="fRow">
+                        <button type="button" id="resetButton">Custom</button>
+                    </div>
+                    <div class="fRow">
+                        <label for="width">Width</label>
+                        <input type="number" name="width" min="5" max="255" value="8">
+                        <label for="height">Height</label>
+                        <input type="number" name="height" min="5" max="255" value="8">
+                    </div>
+                    <div class="fRow">
+                        <label for="mines">Mines</label>
+                        <input type="number" name="mines" value="8">
+                    </div>
+                </div>
+            </li>
+            <li id="saveButton">
+                <img src="img/save.png" alt="Save" title="Save">
+            </li>
+            <li>
+                <img src="img/load.png" alt="Load" title="Load">
+                <div class="controlsExpand">
+                    <label for="saveData">Game Code</label>
+                    <textarea id="saveData" name="saveData"></textarea>
+                    <button type="button" id="loadButton">Load</button>
+                </div>
+            </li>
+        </ul>
+    </aside>
+    <h1>Swap/Match-3</h1>
+    <div id="gameArea">
+        <!-- Javascript will generate a table here to contain all the cells -->
+    </div>
+    <script src="swapmatch3.js"></script>
+</body>
+</html>

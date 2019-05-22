@@ -9,107 +9,43 @@ body {
 }
 
 #gameArea td {
-    width: 32px;
-    max-width: 32px;
-    min-width: 32px;
-    height: 32px;
-}
-
-input[type="number"] {
-    width: 3em;
-}
-
-#gameSetup > div:not(:last-child) {
-    margin-bottom: 5px;
-}
-
-label {
-    font-weight: bold;
-}
-
-#controlsBlock {
-    position: fixed;
-    left: 0;
-    top: 0;
-    height: 100%;
-    width: 50px;
-
-    background-color: green;
-}
-
-#controlsBlock ul {
-    padding: 0;
-    margin: 50px 0 0;
-    list-style: none;
-}
-
-#controlsBlock li {
-    -webkit-box-sizing: border-box;
-    -moz-box-sizing: border-box;
-    box-sizing: border-box;
-    width: 100%;
-    padding: 8px;
-    height: 50px;
-    /*do this for absolute nested elements*/
-    position: relative;
-}
-
-#controlsBlock li:hover {
-    background-color: darkgreen;
-}
-
-#controlsBlock li:hover > .controlsExpand, .controlsExpand:hover {
-    display: block;
-}
-
-.controlsExpand {
-    position: absolute;
-    top: -16px;
-    left: 50px;
-    display: none;
-
-    width: 250px;
-
-    background-color: white;
-    padding: 16px 8px;
-    border: 1px solid green;
-    border-left: none;
-}
-
-.fRow {
-    margin-bottom: 5px;
+    width: 64px;
+    max-width: 64px;
+    min-width: 64px;
+    height: 64px;
+    background-size: contain; 
 }
 
 .r {
-    background-color: red;
+    background-image: url(../img/r.jpg);
 }
 
 .o {
-    background-color: orange;
+    background-image: url(../img/o.jpg);
 }
 
 .y {
-    background-color: yellow;
+    background-image: url(../img/y.jpg);
 }
 
 .g {
-    background-color: green
+    background-image: url(../img/g.jpg);
 }
 
 .b {
-    background-color: blue;
+    background-image: url(../img/b.jpg);
 }
 
 .i {
-    background-color: rgb(103, 255, 169);
+    background-image: url(../img/i.jpg);
 }
 
 .v {
-    background-color: magenta;
+    background-image: url(../img/v.jpg);
 }
 
 .S {
-    border: 4px solid white;
+    border: 2px solid white;
     box-sizing: border-box;
 }
 

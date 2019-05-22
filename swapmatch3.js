@@ -28,6 +28,10 @@ function idx(x, y) {
 }
 
 function setCellColor(x, y, color) {
+    var idx = y * W + x;
+    if (idx >= W * H || idx < 0) {
+        throw "Index out of bounds"
+    }
     colors[y * W + x] = color;
 }
 
@@ -42,6 +46,9 @@ function areCellsAdjacent(x1,y1,x2,y2) {
 
 function swapCells(x1,y1,x2,y2) {
     var i = y1 * W + x1, j = y2 * W + x2;
+    if (i < 0 || i >= W * H || j < 0 || j >= W * H) {
+        throw "Index out of bounds"
+    }
     var temp = colors[i];
     colors[i] = colors[j];
     colors[j] = temp;
@@ -115,14 +122,33 @@ function cellMouseUp() {
     } else {
         if (areCellsAdjacent(selectedX, selectedY, x, y)
                 && (getCellColor(x, y) !== 0 && getCellColor(selectedX, selectedY) !== 0)) {
+            var debugTemp = colors.slice();
             swapCells(selectedX, selectedY, x, y);
             checkForMatch(x, y);
             checkForMatch(selectedX, selectedY);
+            var debugMatches = pendingMatches.slice();
             if (pendingMatches.length === 0) {
                 // undo illegal move
                 swapCells(selectedX, selectedY, x, y);
             } else {
                 resolveMatchesCascade();
+                // debug
+                var hasEmpties = false;
+                for (var i = 0; i < 64; i++) {
+                    if (colors[i] === 0) {
+                        hasEmpties = true;
+                        break;
+                    }
+                } 
+                if (hasEmpties || colors.length > 64) {
+                    console.log("Previous state: ");
+                    console.log(debugTemp)
+                    console.log(`Tile 1 (Selected): ${selectedX}, ${selectedY}`);
+                    console.log(`Tile 2 (toSwap) ${x}, ${y}`)
+                    console.log("Generated Matches: ");
+                    console.log(debugMatches);
+                }
+                // / debug
                 // TODO better rendering,
                 renderBoard();
             }
@@ -199,9 +225,15 @@ function checkForMatch(originX, originY) {
         x++;
     }
 
-    // don't pass note values less than 3, because it will affect the clearing algorithm
-    if (lx < 3) lx = 1;
-    if (ly < 3) ly = 1;
+    // don't pass values less than 3, because it will affect the clearing algorithm
+    if (lx < 3) {
+        lx = 1;
+        offx = 0;
+    }
+    if (ly < 3) {
+        ly = 1;
+        offy = 0;
+    }
 
     if (lx >= 3 || ly >= 3) {
         pendingMatches.push(new Match(originX, originY, offx, offy, lx, ly));
@@ -217,6 +249,7 @@ function checkForMatch(originX, originY) {
  *     if the cell is empty :
  *         swap the empty cell with the row above
  *     move up a row and repeat
+ * Insert random items at the top
  * check for new matches
  */
 function resolveMatchesCascade() {
@@ -226,7 +259,9 @@ function resolveMatchesCascade() {
 
     for (var i = 0; i < pendingMatches.length; i++) {
         var match = pendingMatches[i];
-        var startY = match.originY + match.offsetY + match.lengthY;
+        // start at the bottom and work up
+        // note that the end is an exclusive index, so subtract 1
+        var startY = match.originY + match.offsetY + match.lengthY - 1;
         // endY is implicitly 0, the top off the board
         var startX = match.originX + match.offsetX;
         var endX = startX + match.lengthX;
@@ -235,19 +270,13 @@ function resolveMatchesCascade() {
             for (var y = startY; y > 0; y--) {
                 var nextNonEmptyY = y-1;
                 if (getCellColor(x, y) === 0) {
-                    while (nextNonEmptyY >= 0 && getCellColor(x,nextNonEmptyY) === 0) nextNonEmptyY--;
-                    // possible optimization here?:
-                    // if the whole column is empty, go to the next column
-                    // this is an optimization which stops the program from wasting time
-                    // swapping identical empty cells
-                    // the following did not work
-                    // if (y - nextNonEmptyY > 1) break cascadeColumn;
+                    while (nextNonEmptyY > 0 && getCellColor(x,nextNonEmptyY) === 0) nextNonEmptyY--;
                     swapCells(x,y, x,nextNonEmptyY);
                 }
             }
         }
         // fill top row with randoms
-        for (var x = startX; x <= endX; x++) {
+        for (var x = startX; x < endX; x++) {
             var lowestEmptyRow = 0; // by lowest, I mean spacially, think of a spreadsheet
             while (getCellColor(x, lowestEmptyRow) === 0) {
                 setCellColor(x, lowestEmptyRow, getRandomInt(1,7));

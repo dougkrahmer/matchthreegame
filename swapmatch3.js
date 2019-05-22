@@ -1,9 +1,19 @@
-
+/**
+ * GLOSSARY:
+ * Tile: an object in the game that the player interacts with.
+ * It can be moved around the board
+ * 
+ * Cell:
+ * The location on the board itself. Every tile occupies a cell,
+ * or is in a transition state between them.
+ */
 const W = 8;
 const H = 8;
+const CELL_SIZE = 64;
 const NUM_COLORS = 7;
 // null, red, orange, yellow, green, blue, indigo, violet
-const COLOR_CSS_CLASSES = 'nroygbiv'.split('');
+const IMAGE_NAMES = 'roygbiv'.split('');
+var images = [];
 
 var allowDrag = false;
 /**
@@ -13,6 +23,10 @@ var allowDrag = false;
 var colors = [];
 var selectedX = -1, selectedY = -1;
 var pendingMatches = [];
+
+// this pointless syntax enables type completion in Visual Studio Code
+var canvas = false ? new HTMLCanvasElement() : null;
+var graphics = false ? canvas.getContext('2d') : null;
 /**
  * 
  * @param {number} x index
@@ -71,54 +85,57 @@ function createBoard(rows, columns) {
     }
 }
 
-/**
- * Create DOM elements for the board.
- * Only use this method when starting a new game or loading a game
- */
 function renderBoard() {
-    var gameArea = document.getElementById('gameArea');
-    // best way to remove child nodes http://stackoverflow.com/questions/3955229/
-    if (gameArea.children.length > 0) gameArea.innerHTML = '';
-    var table = document.createElement("table");
-    // prevent the context menu from opening when the user clicks inside a cell
-    table.oncontextmenu = function(e) {
-        e.preventDefault();
-        return false;
-    };
-    gameArea.appendChild(table);
-
+    graphics.fillStyle = 'white';
+    graphics.fillRect(0,0, canvas.width, canvas.height);
     for (var y = 0; y < H; y++) {
-        var row = document.createElement("tr");
-        table.appendChild(row);
         for (var x = 0; x < W; x++) {
-            var cell = document.createElement("td");
-            cell.id = 'r'+y+'c'+x;
-            cell.classList.add(COLOR_CSS_CLASSES[getCellColor(x, y)]);
-            // simulate a click event, making sure the user presses and releases
-            // on the same element, rather than holding down and dragging
-            // to a different cell
-            cell.onmousedown = cellMouseDown;
-            // use mouseup because click does not fire on right click
-            cell.onmouseup = cellMouseUp;
-            row.appendChild(cell);
+            renderCell(x, y);
         }
     }
 }
 
-var clickedElement = null;
-function cellMouseDown() {
-    clickedElement = this;
+function renderCell(x, y) {
+    graphics.fillStyle = 'white';
+    graphics.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+    var c = getCellColor(x, y);
+    if (c !== 0) {
+        graphics.drawImage(images[c-1], x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+    }
+    if (selectedX === x && selectedY === y) {
+        graphics.strokeRect(x * CELL_SIZE + 1, y * CELL_SIZE + 1, CELL_SIZE - 2, CELL_SIZE - 2);
+    }
 }
 
-function cellMouseUp() {
-    // TODO click and drag this later so you can swap by clicking and dragging to a different cell
-    if (!allowDrag && this != clickedElement) return;
-    var [y, x] = this.id.substr(1).split('c').map(e => +e);
-    var element = getElementForCell(x, y);
+function clearSelection() {
+    // remove selection graphics
+    var previousX = selectedX;
+    var previousY = selectedY;
+    selectedX = -1;
+    selectedY = -1;
+    renderCell(previousX, previousY);
+}
+
+// TODO
+var _event; // use to check if you mouse up over the same cell you moused down on
+function canvasMouseDown(event) {
+    _event = event;
+}
+
+function cellMouseDown(x,y) {
+}
+
+function canvasMouseUp(event) {
+    var x = Math.floor(event.offsetX / CELL_SIZE);
+    var y = Math.floor(event.offsetY / CELL_SIZE);
+    cellMouseUp(x, y)
+}
+
+function cellMouseUp(x, y) {
     if (selectedX === -1) {
         selectedX = x;
         selectedY = y;
-        element.classList.add("S");
+        renderCell(x, y);
     } else {
         if (areCellsAdjacent(selectedX, selectedY, x, y)
                 && (getCellColor(x, y) !== 0 && getCellColor(selectedX, selectedY) !== 0)) {
@@ -130,33 +147,34 @@ function cellMouseUp() {
             if (pendingMatches.length === 0) {
                 // undo illegal move
                 swapCells(selectedX, selectedY, x, y);
+                clearSelection();
             } else {
                 resolveMatchesCascade();
-                // debug
-                var hasEmpties = false;
-                for (var i = 0; i < 64; i++) {
-                    if (colors[i] === 0) {
-                        hasEmpties = true;
-                        break;
+                {// debug
+                    var hasEmpties = false;
+                    for (var i = 0; i < 64; i++) {
+                        if (colors[i] === 0) {
+                            hasEmpties = true;
+                            break;
+                        }
+                    } 
+                    if (hasEmpties || colors.length > 64) {
+                        console.log("Previous state: ");
+                        console.log(debugTemp)
+                        console.log(`Tile 1 (Selected): ${selectedX}, ${selectedY}`);
+                        console.log(`Tile 2 (toSwap) ${x}, ${y}`)
+                        console.log("Generated Matches: ");
+                        console.log(debugMatches);
                     }
-                } 
-                if (hasEmpties || colors.length > 64) {
-                    console.log("Previous state: ");
-                    console.log(debugTemp)
-                    console.log(`Tile 1 (Selected): ${selectedX}, ${selectedY}`);
-                    console.log(`Tile 2 (toSwap) ${x}, ${y}`)
-                    console.log("Generated Matches: ");
-                    console.log(debugMatches);
-                }
-                // / debug
+                }// /debug
                 // TODO better rendering,
+                selectedX = -1;
+                selectedY = -1;
                 renderBoard();
             }
+        } else {
+            clearSelection();
         }
-        element = getElementForCell(selectedX, selectedY);
-        element.classList.remove("S");
-        selectedX = -1;
-        selectedY = -1;
     }
 }
 /**
@@ -287,20 +305,36 @@ function resolveMatchesCascade() {
     pendingMatches = [];
 }
 
-function getElementForCell(x, y) {
-    return document.getElementById("r" + y + "c" + x);
-}
-
 function getRandomInt(min, max) {
     min = Math.ceil(min);
     max = Math.floor(max);
     return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
+function loadImage(name) {
+    return new Promise(resolve => {
+        var img = new Image();
+        img.onload = () => resolve();
+        img.src = 'img/' + name + '.png';
+        images.push(img);
+    });
+}
+
+function loadImages() {
+    return Promise.all(IMAGE_NAMES.map(loadImage));
+}
 
 function init() {
+    canvas = document.getElementById('game');
+    canvas.width = W * CELL_SIZE;
+    canvas.height = H * CELL_SIZE;
+    graphics = canvas.getContext('2d');
     createBoard();
-    renderBoard();
+    loadImages().then(() => {
+        renderBoard();
+        canvas.onmousedown = canvasMouseDown;
+        canvas.onmouseup = canvasMouseUp;
+    });
 }
 
 init();

@@ -55,7 +55,7 @@ function setCellColor(x, y, color) {
 function areCellsAdjacent(x1,y1,x2,y2) {
     var a = y1 * W + x1, b = y2 * W + x2;
     var diff = Math.abs(a - b);
-    return diff === W || diff === 1;
+    return diff === W || (diff === 1 && y1 === y2);
 }
 
 function swapCells(x1,y1,x2,y2) {

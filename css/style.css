@@ -2,54 +2,7 @@ body {
     padding-left: 60px; /* give space for the side bar */
 }
 
-#gameArea table {
-    border-collapse: separate;
-    border-spacing: 1px;
-    background-color: #A0A0A0;
-}
-
-#gameArea td {
-    width: 64px;
-    max-width: 64px;
-    min-width: 64px;
-    height: 64px;
-    background-size: contain;
-    background-color: white;
-}
-
-.r {
-    background-image: url(../img/r.png);
-}
-
-.o {
-    background-image: url(../img/o.png);
-}
-
-.y {
-    background-image: url(../img/y.png);
-}
-
-.g {
-    background-image: url(../img/g.png);
-}
-
-.b {
-    background-image: url(../img/b.png);
-}
-
-.i {
-    background-image: url(../img/i.png);
-}
-
-.v {
-    background-image: url(../img/v.png);
-}
-
-.S {
-    border: 2px solid white;
-    box-sizing: border-box;
-}
-
-.n {
-    background-color: black;
+#game {
+    border: black 3px;
+    border-style: double;
 }

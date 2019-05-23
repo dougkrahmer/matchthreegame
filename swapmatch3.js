@@ -6,10 +6,14 @@
  * Cell:
  * The location on the board itself. Every tile occupies a cell,
  * or is in a transition state between them.
+ * 
+ * Any function name starting with 'g' is a function that uses the graphics object
+ * This keeps them distict from the logical game functions, allowing for
+ * neat, conceptual, decoupled code.
  */
 const W = 8;
 const H = 8;
-const CELL_SIZE = 64;
+const G_CELL_SIZE = 64;
 const NUM_COLORS = 7;
 // null, red, orange, yellow, green, blue, indigo, violet
 const IMAGE_NAMES = 'roygbiv'.split('');
@@ -17,24 +21,58 @@ var images = [];
 
 var allowDrag = false;
 /**
- * An array of integers representing which color each cell is.
+ * DON'T ACCESS DIRECTLY (except to debug): 
+ * it will make your life easier in the long run (encapsulation)
+ * 
+ * An array of integers representing which color each tile is.
  * This array is one dimensional.
  */
-var colors = [];
+var _colors = [];
+/**
+ * An array of FLOATS showing how far away from a cell to render a tile.
+ * This is used to animate tiles falling to fill a cleared space
+ */
+var _tileYPixelOffsets = new Array(W * H);
 var selectedX = -1, selectedY = -1;
 var pendingMatches = [];
 
 // this pointless syntax enables type completion in Visual Studio Code
 var canvas = false ? new HTMLCanvasElement() : null;
 var graphics = false ? canvas.getContext('2d') : null;
+
+var gGravityCallbackID = null;
+// all tiles will fall at the same time, 
+// so as long as there is one moving
+// we can increase the acceleration for all of them
+var gGravityAccelerationCounter = 0;
 /**
  * 
  * @param {number} x index
  * @param {number} y index
  * @returns {number} which color is at (x,y)
  */
-function getCellColor(x, y) {
-    return colors[y * W + x] & 7; // lowest 3 bits represent color
+function getTileColor(x, y) {
+    var idx = y * W + x;
+    if (idx >= W * H || idx < 0) {
+        throw "Index out of bounds"
+    }
+    return _colors[idx] & 7; // lowest 3 bits represent color
+}
+
+function gGetTileYPixelOffset(x, y) {
+    var idx = y * W + x;
+    if (idx >= W * H || idx < 0) {
+        throw "Index out of bounds"
+    }
+    return _tileYPixelOffsets[idx]
+}
+
+function gSetTileYPixelOffset(x, y, yOffset) {
+    var idx = y * W + x;
+    if (idx >= W * H || idx < 0) {
+        throw "Index out of bounds"
+    }
+    _tileYPixelOffsets[idx] = yOffset;
 }
 
 function idx(x, y) {
@@ -46,7 +84,7 @@ function setCellColor(x, y, color) {
     if (idx >= W * H || idx < 0) {
         throw "Index out of bounds"
     }
-    colors[y * W + x] = color;
+    _colors[idx] = color;
 }
 
 /**
@@ -63,9 +101,9 @@ function swapCells(x1,y1,x2,y2) {
     if (i < 0 || i >= W * H || j < 0 || j >= W * H) {
         throw "Index out of bounds"
     }
-    var temp = colors[i];
-    colors[i] = colors[j];
-    colors[j] = temp;
+    var temp = _colors[i];
+    _colors[i] = _colors[j];
+    _colors[j] = temp;
 }
 
 
@@ -78,42 +116,48 @@ function swapCells(x1,y1,x2,y2) {
 */
 function createBoard(rows, columns) {
     const size = W*H;
-    colors = new Array(size);
+    _colors = new Array(size);
     for (var i = 0; i < size; i++) {
-        colors[i] = i % NUM_COLORS + 1;
-        if (i % 8 % 3 == 0) colors[i] = (colors[i] + 1) % NUM_COLORS + 1;
+        _colors[i] = i % NUM_COLORS + 1;
+        if (i % 8 % 3 == 0) _colors[i] = (_colors[i] + 1) % NUM_COLORS + 1;
     }
 }
 
-function renderBoard() {
+function gRenderBoard() {
     graphics.fillStyle = 'white';
     graphics.fillRect(0,0, canvas.width, canvas.height);
     for (var y = 0; y < H; y++) {
         for (var x = 0; x < W; x++) {
-            renderCell(x, y);
+            gRenderTile(x, y);
         }
     }
 }
 
-function renderCell(x, y) {
-    graphics.fillStyle = 'white';
-    graphics.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
-    var c = getCellColor(x, y);
+function gRenderTile(x, y) {
+    var c = getTileColor(x, y);
+    var offset = gGetTileYPixelOffset(x, y) || 0;
     if (c !== 0) {
-        graphics.drawImage(images[c-1], x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
-    }
-    if (selectedX === x && selectedY === y) {
-        graphics.strokeRect(x * CELL_SIZE + 1, y * CELL_SIZE + 1, CELL_SIZE - 2, CELL_SIZE - 2);
+        graphics.drawImage(images[c-1], x * G_CELL_SIZE, y * G_CELL_SIZE + offset, G_CELL_SIZE, G_CELL_SIZE);
     }
 }
 
-function clearSelection() {
+function gRenderSelection(x, y) {
+    graphics.strokeRect(x * G_CELL_SIZE + 1, y * G_CELL_SIZE + 1, G_CELL_SIZE - 2, G_CELL_SIZE - 2);
+}
+
+function gEraseCell(x, y) {
+    graphics.fillStyle = 'white';
+    graphics.fillRect(x * G_CELL_SIZE, y * G_CELL_SIZE, G_CELL_SIZE, G_CELL_SIZE);
+}
+
+function gClearSelection() {
     // remove selection graphics
     var previousX = selectedX;
     var previousY = selectedY;
     selectedX = -1;
     selectedY = -1;
-    renderCell(previousX, previousY);
+    gEraseCell(previousX, previousY);
+    gRenderTile(previousX, previousY);
 }
 
 // TODO
@@ -126,8 +170,8 @@ function cellMouseDown(x,y) {
 }
 
 function canvasMouseUp(event) {
-    var x = Math.floor(event.offsetX / CELL_SIZE);
-    var y = Math.floor(event.offsetY / CELL_SIZE);
+    var x = Math.floor(event.offsetX / G_CELL_SIZE);
+    var y = Math.floor(event.offsetY / G_CELL_SIZE);
     cellMouseUp(x, y)
 }
 
@@ -135,11 +179,11 @@ function cellMouseUp(x, y) {
     if (selectedX === -1) {
         selectedX = x;
         selectedY = y;
-        renderCell(x, y);
+        gRenderSelection(x, y);
     } else {
         if (areCellsAdjacent(selectedX, selectedY, x, y)
-                && (getCellColor(x, y) !== 0 && getCellColor(selectedX, selectedY) !== 0)) {
-            var debugTemp = colors.slice();
+                && (getTileColor(x, y) !== 0 && getTileColor(selectedX, selectedY) !== 0)) {
+            var debugTemp = _colors.slice();
             swapCells(selectedX, selectedY, x, y);
             checkForMatch(x, y);
             checkForMatch(selectedX, selectedY);
@@ -147,18 +191,19 @@ function cellMouseUp(x, y) {
             if (pendingMatches.length === 0) {
                 // undo illegal move
                 swapCells(selectedX, selectedY, x, y);
-                clearSelection();
+                gClearSelection();
             } else {
                 resolveMatchesCascade();
+                gAnimateGravity();
                 {// debug
                     var hasEmpties = false;
                     for (var i = 0; i < 64; i++) {
-                        if (colors[i] === 0) {
+                        if (_colors[i] === 0) {
                             hasEmpties = true;
                             break;
                         }
                     } 
-                    if (hasEmpties || colors.length > 64) {
+                    if (hasEmpties || _colors.length > 64) {
                         console.log("Previous state: ");
                         console.log(debugTemp)
                         console.log(`Tile 1 (Selected): ${selectedX}, ${selectedY}`);
@@ -170,10 +215,10 @@ function cellMouseUp(x, y) {
                 // TODO better rendering,
                 selectedX = -1;
                 selectedY = -1;
-                renderBoard();
+                gRenderBoard();
             }
         } else {
-            clearSelection();
+            gClearSelection();
         }
     }
 }
@@ -217,28 +262,28 @@ class Match {
 }
 
 function checkForMatch(originX, originY) {
-    const originColor = getCellColor(originX, originY);
+    const originColor = getTileColor(originX, originY);
     var lx = 1, ly = 1, offx = 0, offy = 0;
 
     var y = originY - 1;
-    while (y >= 0 && getCellColor(originX, y) == originColor) {
+    while (y >= 0 && getTileColor(originX, y) == originColor) {
         ly++;
         offy--;
         y--;
     }
     y = originY + 1;
-    while (y < H && getCellColor(originX, y) == originColor) {
+    while (y < H && getTileColor(originX, y) == originColor) {
         ly++;
         y++;
     }
     var x = originX - 1;
-    while (x >= 0 && getCellColor(x, originY) == originColor) {
+    while (x >= 0 && getTileColor(x, originY) == originColor) {
         lx++;
         offx--;
         x--;
     }
     x = originX + 1;
-    while (x < W && getCellColor(x, originY) == originColor) {
+    while (x < W && getTileColor(x, originY) == originColor) {
         lx++;
         x++;
     }
@@ -287,18 +332,27 @@ function resolveMatchesCascade() {
         for (var x = startX; x < endX; x++) {
             for (var y = startY; y > 0; y--) {
                 var nextNonEmptyY = y-1;
-                if (getCellColor(x, y) === 0) {
-                    while (nextNonEmptyY > 0 && getCellColor(x,nextNonEmptyY) === 0) nextNonEmptyY--;
+                if (getTileColor(x, y) === 0) {
+                    while (nextNonEmptyY > 0 && getTileColor(x,nextNonEmptyY) === 0) {
+                        nextNonEmptyY--;
+                    }
                     swapCells(x,y, x,nextNonEmptyY);
+                    var gYOffset = -(y - nextNonEmptyY) * G_CELL_SIZE;
+                    gSetTileYPixelOffset(x, y, gYOffset);
                 }
             }
         }
         // fill top row with randoms
         for (var x = startX; x < endX; x++) {
             var lowestEmptyRow = 0; // by lowest, I mean spacially, think of a spreadsheet
-            while (getCellColor(x, lowestEmptyRow) === 0) {
+            while (lowestEmptyRow < H && getTileColor(x, lowestEmptyRow) === 0) {
                 setCellColor(x, lowestEmptyRow, getRandomInt(1,7));
                 lowestEmptyRow++;
+            }
+            lowestEmptyRow -= 1;
+            // now that we know how many empty spaces there were, calculate fall gravity
+            for (var y = lowestEmptyRow; y >= 0; y--) {
+                gSetTileYPixelOffset(x,y, -(lowestEmptyRow+1) * G_CELL_SIZE)
             }
         }
     }
@@ -324,16 +378,37 @@ function loadImages() {
     return Promise.all(IMAGE_NAMES.map(loadImage));
 }
 
+function gAnimateGravity(time) {
+    var allTilesStationary = true;
+    // TODO use the time instead of a counter, frame rates are arbitrary
+    gGravityAccelerationCounter++;
+    for (var i = 0; i < W * H; i++) {
+        if (_tileYPixelOffsets[i] < 0) {
+            _tileYPixelOffsets[i] = 
+                    Math.min(gGravityAccelerationCounter + _tileYPixelOffsets[i], 0);
+            allTilesStationary = false;
+        }
+    }
+    gRenderBoard();
+    gGravityCallbackID = requestAnimationFrame(gAnimateGravity);
+    if (allTilesStationary) {
+        cancelAnimationFrame(gGravityCallbackID);
+        gGravityCallbackID = null;
+        gGravityAccelerationCounter = 0;
+    }
+}
+
 function init() {
     canvas = document.getElementById('game');
-    canvas.width = W * CELL_SIZE;
-    canvas.height = H * CELL_SIZE;
+    canvas.width = W * G_CELL_SIZE;
+    canvas.height = H * G_CELL_SIZE;
     graphics = canvas.getContext('2d');
     createBoard();
     loadImages().then(() => {
-        renderBoard();
+        gRenderBoard();
         canvas.onmousedown = canvasMouseDown;
         canvas.onmouseup = canvasMouseUp;
+        gGravityCallbackID = requestAnimationFrame(gAnimateGravity);
     });
 }
 

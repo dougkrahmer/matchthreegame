@@ -193,8 +193,10 @@ function cellMouseUp(x, y) {
                 swapCells(selectedX, selectedY, x, y);
                 gClearSelection();
             } else {
-                resolveMatchesCascade();
-                gAnimateGravity();
+                resolveMatches();
+                gAnimateGravity().then(() => {
+                    findCascadeMatches(pendingMatches);
+                });
                 {// debug
                     var hasEmpties = false;
                     for (var i = 0; i < 64; i++) {
@@ -247,16 +249,17 @@ class Match {
         this.lengthY = lengthY;
     }
 
-    resolve() {
+    // now you're thinking with functions
+    forEachCell(fn) {
         var startX = this.originX + this.offsetX;
         var startY = this.originY + this.offsetY;
 
         for (var x = startX; x < startX + this.lengthX; x++) {
-            setCellColor(x, this.originY, 0);
+            fn(x, this.originY);
         }
 
         for (var y = startY; y < startY + this.lengthY; y++) {
-            setCellColor(this.originX, y, 0);
+            fn(this.originX, y);
         }
     }
 }
@@ -303,6 +306,24 @@ function checkForMatch(originX, originY) {
     }
 }
 
+// okay, this is epic 
+function findCascadeMatches(previousMatches) {
+    pendingMatches = [];
+    for (var i = 0; i < previousMatches.length; i++) {
+        previousMatches[i].forEachCell((ox,oy) => {
+            for (var y = oy; y >= 0; y--) {
+                checkForMatch(ox, y);
+            }
+        });
+    }
+    if (pendingMatches.length > 0) {
+        resolveMatches();
+        gAnimateGravity().then(() => {
+            findCascadeMatches(pendingMatches);
+        });
+    }
+}
+
 /*
  * algorithm:
  * remove all of the matched tiles
@@ -315,9 +336,11 @@ function checkForMatch(originX, originY) {
  * Insert random items at the top
  * check for new matches
  */
-function resolveMatchesCascade() {
+function resolveMatches() {
     for (var i = 0; i < pendingMatches.length; i++) {
-        pendingMatches[i].resolve();
+        pendingMatches[i].forEachCell((x, y) => {
+            setCellColor(x, y, 0);
+        });
     }
 
     for (var i = 0; i < pendingMatches.length; i++) {
@@ -356,7 +379,6 @@ function resolveMatchesCascade() {
             }
         }
     }
-    pendingMatches = [];
 }
 
 function getRandomInt(min, max) {
@@ -378,24 +400,36 @@ function loadImages() {
     return Promise.all(IMAGE_NAMES.map(loadImage));
 }
 
-function gAnimateGravity(time) {
-    var allTilesStationary = true;
-    // TODO use the time instead of a counter, frame rates are arbitrary
-    gGravityAccelerationCounter++;
-    for (var i = 0; i < W * H; i++) {
-        if (_tileYPixelOffsets[i] < 0) {
-            _tileYPixelOffsets[i] = 
-                    Math.min(gGravityAccelerationCounter + _tileYPixelOffsets[i], 0);
-            allTilesStationary = false;
+// this is seriously incomprehensible
+// derived from https://yeti.co/blog/cool-tricks-with-animating-using-requestanimationframe/
+function _gravityStep(resolve) {
+    return function(time) {
+        var allTilesStationary = true;
+        // TODO use the time instead of a counter, frame rates are arbitrary
+        // console.log(time);
+        gGravityAccelerationCounter += 1;
+        for (var i = 0; i < W * H; i++) {
+            if (_tileYPixelOffsets[i] < 0) {
+                _tileYPixelOffsets[i] = 
+                        Math.min(gGravityAccelerationCounter + _tileYPixelOffsets[i], 0);
+                allTilesStationary = false;
+            }
+        }
+        gRenderBoard();
+        gGravityCallbackID = requestAnimationFrame(_gravityStep(resolve));
+        if (allTilesStationary) {
+            cancelAnimationFrame(gGravityCallbackID);
+            gGravityCallbackID = null;
+            gGravityAccelerationCounter = 0;
+            resolve();
         }
     }
-    gRenderBoard();
-    gGravityCallbackID = requestAnimationFrame(gAnimateGravity);
-    if (allTilesStationary) {
-        cancelAnimationFrame(gGravityCallbackID);
-        gGravityCallbackID = null;
-        gGravityAccelerationCounter = 0;
-    }
+}
+
+function gAnimateGravity() {
+    return new Promise(resolve => {
+        requestAnimationFrame(_gravityStep(resolve));
+    });
 }
 
 function init() {
@@ -408,7 +442,6 @@ function init() {
         gRenderBoard();
         canvas.onmousedown = canvasMouseDown;
         canvas.onmouseup = canvasMouseUp;
-        gGravityCallbackID = requestAnimationFrame(gAnimateGravity);
     });
 }
 

@@ -257,6 +257,14 @@ class Match {
         this.lengthY = lengthY;
     }
 
+    startX() {
+        return this.originX + this.offsetX;
+    }
+
+    startY() {
+        return this.originY + this.offsetY;
+    }
+
     // now you're thinking with functions
     forEachCell(fn) {
         var startX = this.originX + this.offsetX;
@@ -271,15 +279,13 @@ class Match {
         }
     }
 
-    hasSameCellsAs(match) {
-        var startX = this.originX + this.offsetX;
-        var otherStartX = match.originX + match.offsetX;
-
-        var startY = this.originY + this.offsetY;
-        var otherStartY = match.originY + match.offsetY;
-
-        return (startX == otherStartX && this.lengthX == match.lengthX
-                && startY == otherStartY && this.lengthY == match.lengthY);
+    hasSameCellsAs(other) {
+        return this.originX == other.originX 
+                && this.originY == other.originY
+                && this.offsetX == other.offsetX
+                && this.offsetY == other.offsetY
+                && this.lengthX == other.lengthX
+                && this.lengthY == other.lengthY;
     }
 
     numberOfCells() {
@@ -344,37 +350,39 @@ function findCascadeMatches(previousMatches) {
             }
         });
     }
-    var prevColumnMatchCount = 0;
     for (var x = 0; x < W; x++) {
-        var matchCount = 0;
         for (var y = lowestCellPerColumn[x]; y >= 0; y--) {
             var match = checkForMatch(x,y);
             if (match) {
-                if (pendingMatches.length >= 2 && prevColumnMatchCount != 0) {
-                    // since we are counting upwards before moving right, find the match from the other column
-                    var indexOfPossibleDuplicate = pendingMatches.length - (prevColumnMatchCount + 1);
-                    var possibleDuplicateOf = pendingMatches[indexOfPossibleDuplicate];
-                    var startX = match.originX + match.offsetX;
-                    var otherX = possibleDuplicateOf.originX + possibleDuplicateOf.offsetX;
-
-                    if (startX == otherX) {
-                        if (match.lengthY == possibleDuplicateOf.lengthY) {
-                            pendingMatches.pop();
-                        } else {
-                            // this is a situation where we've actually discovered a T or L match,
-                            // in that case, this match must supercede the other one
-                            pendingMatches.splice(indexOfPossibleDuplicate, 1);
+                for (var i = 0; i < pendingMatches.length - 1; i++) {
+                    var otherMatch = pendingMatches[i];
+                    if (match.hasSameCellsAs(otherMatch)) {
+                        pendingMatches.pop();
+                        break;
+                    } else {
+                        // handle various jointed matches
+                        if (match.startX() == otherMatch.startX()) {
+                            if (match.lengthY > otherMatch.lengthY) {
+                                pendingMatches.splice(i, 1);
+                                break;
+                            } else if (match.lengthY < otherMatch.lengthY) {
+                                // outrageously rare I or U shaped maches should result in 1 match at each joint
+                                pendingMatches.pop();
+                                break;
+                            }
+                        } else if (match.startY() == otherMatch.startY()) {
+                            if (match.lengthX > otherMatch.lengthX) {
+                                pendingMatches.splice(i, 1);
+                                break;
+                            } else if (match.lengthX < otherMatch.lengthX) {
+                                pendingMatches.pop();
+                                break;
+                            }
                         }
                     }
                 }
-                
-                // skip to the next cell above this match
-                // if it's a vertical match, this prevents double-counting of the cells
-                y -= match.lengthY - 1; // -1 because the loop decrementer will get it
-                matchCount++;
             }
         }
-        prevColumnMatchCount = matchCount;
     }
     if (pendingMatches.length > 0) {
         console.log("Cascade matches: ");

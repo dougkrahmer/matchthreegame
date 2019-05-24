@@ -121,6 +121,10 @@ function createBoard(rows, columns) {
         _colors[i] = i % NUM_COLORS + 1;
         if (i % 8 % 3 == 0) _colors[i] = (_colors[i] + 1) % NUM_COLORS + 1;
     }
+    // create a test pattern
+    // TEST CASE: the extremely rare + shaped match
+    _colors[32] = _colors[33] = _colors[1] = _colors[9] = _colors[17] = 7;
+    _colors[34] = _colors[25] = _colors[41] = 4;
 }
 
 function gRenderBoard() {
@@ -185,15 +189,19 @@ function cellMouseUp(x, y) {
                 && (getTileColor(x, y) !== 0 && getTileColor(selectedX, selectedY) !== 0)) {
             var debugTemp = _colors.slice();
             swapCells(selectedX, selectedY, x, y);
-            checkForMatch(x, y);
-            checkForMatch(selectedX, selectedY);
+            var match1 = checkForMatch(x, y);
+            var match2 = checkForMatch(selectedX, selectedY);
             var debugMatches = pendingMatches.slice();
-            if (pendingMatches.length === 0) {
+            if (match1 === null && match2 === null) {
                 // undo illegal move
                 swapCells(selectedX, selectedY, x, y);
                 gClearSelection();
             } else {
                 resolveMatches();
+                if (pendingMatches.length) {
+                    console.log('User Matches:')
+                    console.log(pendingMatches);
+                }
                 gAnimateGravity().then(() => {
                     findCascadeMatches(pendingMatches);
                 });
@@ -262,6 +270,21 @@ class Match {
             fn(this.originX, y);
         }
     }
+
+    hasSameCellsAs(match) {
+        var startX = this.originX + this.offsetX;
+        var otherStartX = match.originX + match.offsetX;
+
+        var startY = this.originY + this.offsetY;
+        var otherStartY = match.originY + match.offsetY;
+
+        return (startX == otherStartX && this.lengthX == match.lengthX
+                && startY == otherStartY && this.lengthY == match.lengthY);
+    }
+
+    numberOfCells() {
+        return (this.lengthX + this.lengthY) - 1;
+    }
 }
 
 function checkForMatch(originX, originY) {
@@ -302,21 +325,60 @@ function checkForMatch(originX, originY) {
     }
 
     if (lx >= 3 || ly >= 3) {
-        pendingMatches.push(new Match(originX, originY, offx, offy, lx, ly));
+        var match = new Match(originX, originY, offx, offy, lx, ly);
+        pendingMatches.push(match);
+        return match;
     }
+    return null;
 }
 
 // okay, this is epic 
 function findCascadeMatches(previousMatches) {
     pendingMatches = [];
+    // check for a match on every tile that shifted down
+    let lowestCellPerColumn = new Array(W).fill(-1);
     for (var i = 0; i < previousMatches.length; i++) {
-        previousMatches[i].forEachCell((ox,oy) => {
-            for (var y = oy; y >= 0; y--) {
-                checkForMatch(ox, y);
+        previousMatches[i].forEachCell((x,y) => {
+            if (y > lowestCellPerColumn[x]) {
+                lowestCellPerColumn[x] = y;
             }
         });
     }
+    var prevColumnMatchCount = 0;
+    for (var x = 0; x < W; x++) {
+        var matchCount = 0;
+        for (var y = lowestCellPerColumn[x]; y >= 0; y--) {
+            var match = checkForMatch(x,y);
+            if (match) {
+                if (pendingMatches.length >= 2 && prevColumnMatchCount != 0) {
+                    // since we are counting upwards before moving right, find the match from the other column
+                    var indexOfPossibleDuplicate = pendingMatches.length - (prevColumnMatchCount + 1);
+                    var possibleDuplicateOf = pendingMatches[indexOfPossibleDuplicate];
+                    var startX = match.originX + match.offsetX;
+                    var otherX = possibleDuplicateOf.originX + possibleDuplicateOf.offsetX;
+
+                    if (startX == otherX) {
+                        if (match.lengthY == possibleDuplicateOf.lengthY) {
+                            pendingMatches.pop();
+                        } else {
+                            // this is a situation where we've actually discovered a T or L match,
+                            // in that case, this match must supercede the other one
+                            pendingMatches.splice(indexOfPossibleDuplicate, 1);
+                        }
+                    }
+                }
+                
+                // skip to the next cell above this match
+                // if it's a vertical match, this prevents double-counting of the cells
+                y -= match.lengthY - 1; // -1 because the loop decrementer will get it
+                matchCount++;
+            }
+        }
+        prevColumnMatchCount = matchCount;
+    }
     if (pendingMatches.length > 0) {
+        console.log("Cascade matches: ");
+        console.log(pendingMatches);
         resolveMatches();
         gAnimateGravity().then(() => {
             findCascadeMatches(pendingMatches);

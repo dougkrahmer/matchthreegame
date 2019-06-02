@@ -17,6 +17,9 @@ const G_CELL_SIZE = 64;
 const NUM_COLORS = 7;
 // null, red, orange, yellow, green, blue, indigo, violet
 const IMAGE_NAMES = 'roygbiv'.split('');
+const SCORE_BASE = [100, 200, 300];
+const SCORE_EXTRA = 50;
+const SCORE_CROSS_MODIFIER = -50;
 var images = [];
 
 var allowDrag = false;
@@ -45,6 +48,9 @@ var gGravityCallbackID = null;
 // so as long as there is one moving
 // we can increase the acceleration for all of them
 var gGravityAccelerationCounter = 0;
+
+var score = 0;
+var scoreElement;
 /**
  * 
  * @param {number} x index
@@ -137,6 +143,11 @@ function gRenderBoard() {
     }
 }
 
+function gRenderCell(x, y) {
+    graphics.fillStyle = 'white';
+    graphics.fillRect(x * G_CELL_SIZE,y * G_CELL_SIZE, G_CELL_SIZE, G_CELL_SIZE);
+}
+
 function gRenderTile(x, y) {
     var c = getTileColor(x, y);
     var offset = gGetTileYPixelOffset(x, y) || 0;
@@ -162,6 +173,19 @@ function gClearSelection() {
     selectedY = -1;
     gEraseCell(previousX, previousY);
     gRenderTile(previousX, previousY);
+}
+
+function gUpdateScore(score) {
+    scoreElement.innerHTML = ''+score;
+}
+
+function gRenderScorePopup(match) {
+    graphics.fillStyle = 'black';
+    graphics.font = (G_CELL_SIZE / 2) +'px sans-serif';
+    graphics.textBaseline = 'top';
+    graphics.fillText(''+match.score(), 
+            match.originX * G_CELL_SIZE,
+            match.originY * G_CELL_SIZE + G_CELL_SIZE / 4);
 }
 
 // TODO
@@ -202,6 +226,7 @@ function cellMouseUp(x, y) {
                     console.log('User Matches:')
                     console.log(pendingMatches);
                 }
+                gUpdateScore(score);
                 gAnimateGravity().then(() => {
                     findCascadeMatches(pendingMatches);
                 });
@@ -290,6 +315,18 @@ class Match {
 
     numberOfCells() {
         return (this.lengthX + this.lengthY) - 1;
+    }
+
+    score() {
+        var count = this.numberOfCells() - 3;
+        var _score = SCORE_BASE[Math.min(count, 2)];
+        if (count > 2) {
+            _score += (count - 2) * SCORE_EXTRA;
+        }
+        if (this.lengthX > 1 && this.lengthY > 1) {
+            _score += SCORE_CROSS_MODIFIER;
+        }
+        return _score;
     }
 }
 
@@ -388,6 +425,7 @@ function findCascadeMatches(previousMatches) {
         console.log("Cascade matches: ");
         console.log(pendingMatches);
         resolveMatches();
+        gUpdateScore(score);
         gAnimateGravity().then(() => {
             findCascadeMatches(pendingMatches);
         });
@@ -411,6 +449,7 @@ function resolveMatches() {
         pendingMatches[i].forEachCell((x, y) => {
             setCellColor(x, y, 0);
         });
+        score += pendingMatches[i].score();
     }
 
     for (var i = 0; i < pendingMatches.length; i++) {
@@ -478,14 +517,22 @@ function _gravityStep(resolve) {
         // TODO use the time instead of a counter, frame rates are arbitrary
         // console.log(time);
         gGravityAccelerationCounter += 1;
-        for (var i = 0; i < W * H; i++) {
-            if (_tileYPixelOffsets[i] < 0) {
-                _tileYPixelOffsets[i] = 
-                        Math.min(gGravityAccelerationCounter + _tileYPixelOffsets[i], 0);
-                allTilesStationary = false;
+        for (var x = 0; x < W; x++) {
+            for (var y = 0; y < H; y++) {
+                var offset = gGetTileYPixelOffset(x, y);
+                if (offset < 0) {
+                    allTilesStationary = false;
+                    gSetTileYPixelOffset(x, y, Math.min(gGravityAccelerationCounter + offset, 0));
+                    gRenderCell(x,y);
+                    gRenderTile(x,y);
+                }
             }
         }
-        gRenderBoard();
+        for (var match of pendingMatches) {
+            if (gGetTileYPixelOffset(match.originX, match.originY) < 0) {
+                gRenderScorePopup(match);
+            }
+        }
         gGravityCallbackID = requestAnimationFrame(_gravityStep(resolve));
         if (allTilesStationary) {
             cancelAnimationFrame(gGravityCallbackID);
@@ -508,6 +555,7 @@ function init() {
     canvas.height = H * G_CELL_SIZE;
     graphics = canvas.getContext('2d');
     createBoard();
+    scoreElement = document.getElementById('score');
     loadImages().then(() => {
         gRenderBoard();
         canvas.onmousedown = canvasMouseDown;

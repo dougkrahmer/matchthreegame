@@ -467,6 +467,7 @@ function pushIfNotDuplicate(matches, match) {
  * Insert random items at the top
  */
 function resolveMatches(matches) {
+    matches = matches.sort((a, b) => b.originY - a.originY);
     for (var i = 0; i < matches.length; i++) {
         matches[i].forEachCell((x, y) => {
             setCellColor(x, y, 0);
@@ -684,5 +685,11 @@ function testH() {
 function testC() {
     _colors[0] = _colors[1] = _colors[2] = _colors[8] =
      _colors[17] = _colors[16] = _colors[18] = 3;
+    gRenderBoard();
+}
+
+function testDoubleHorizontalMatch() {
+    _colors[56] = _colors[49] = _colors[58] = 1;
+    _colors[48] = _colors[57] = _colors[50] = 2;
     gRenderBoard();
 }

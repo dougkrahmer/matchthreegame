@@ -37,7 +37,7 @@ var _colors = [];
  */
 var _tileYPixelOffsets = new Array(W * H);
 var selectedX = -1, selectedY = -1;
-var pendingMatches = [];
+var gAnimatingMatches = [];
 
 // this pointless syntax enables type completion in Visual Studio Code
 var canvas = false ? new HTMLCanvasElement() : null;
@@ -215,22 +215,21 @@ function cellMouseUp(x, y) {
             swapCells(selectedX, selectedY, x, y);
             var match1 = checkForMatch(x, y);
             var match2 = checkForMatch(selectedX, selectedY);
-            var debugMatches = pendingMatches.slice();
             if (match1 === null && match2 === null) {
                 // undo illegal move
                 swapCells(selectedX, selectedY, x, y);
                 gClearSelection();
             } else {
-                resolveMatches();
-                if (pendingMatches.length) {
-                    console.log('User Matches:')
-                    console.log(pendingMatches);
-                }
+                var matches = [match1, match2].filter(e => e !== null);
+                resolveMatches(matches);
+                console.log('User Matches:')
+                console.log(matches);
+                gAnimatingMatches = matches;
                 gUpdateScore(score);
                 gAnimateGravity().then(() => {
-                    findCascadeMatches(pendingMatches);
+                    findCascadeMatches(matches);
                 });
-                {// debug
+                {// (debug) this section should only log if something is very wrong
                     var hasEmpties = false;
                     for (var i = 0; i < 64; i++) {
                         if (_colors[i] === 0) {
@@ -244,7 +243,7 @@ function cellMouseUp(x, y) {
                         console.log(`Tile 1 (Selected): ${selectedX}, ${selectedY}`);
                         console.log(`Tile 2 (toSwap) ${x}, ${y}`)
                         console.log("Generated Matches: ");
-                        console.log(debugMatches);
+                        console.log(matches);
                     }
                 }// /debug
                 // TODO better rendering,
@@ -295,22 +294,32 @@ class Match {
         var startX = this.originX + this.offsetX;
         var startY = this.originY + this.offsetY;
 
-        for (var x = startX; x < startX + this.lengthX; x++) {
-            fn(x, this.originY);
-        }
-
         for (var y = startY; y < startY + this.lengthY; y++) {
-            fn(this.originX, y);
+            var x, end;
+            if (y == this.originY) {
+                x = startX;
+                end = startX + this.lengthX;
+            } else {
+                x = this.originX;
+                end = this.originX + 1;
+            }
+            for (; x < end; x++) {
+                fn(x, y);
+            }
         }
     }
 
+    toStr() {
+        let strRep = '';
+        this.forEachCell((x, y) => {
+            strRep += ''+x+','+y+';';
+        });
+        return strRep;
+    }
+
     hasSameCellsAs(other) {
-        return this.originX == other.originX 
-                && this.originY == other.originY
-                && this.offsetX == other.offsetX
-                && this.offsetY == other.offsetY
-                && this.lengthX == other.lengthX
-                && this.lengthY == other.lengthY;
+        // this is pretty lazily written, could likely be faster
+        return this.toStr() == other.toStr();
     }
 
     numberOfCells() {
@@ -369,7 +378,6 @@ function checkForMatch(originX, originY) {
 
     if (lx >= 3 || ly >= 3) {
         var match = new Match(originX, originY, offx, offy, lx, ly);
-        pendingMatches.push(match);
         return match;
     }
     return null;
@@ -377,7 +385,6 @@ function checkForMatch(originX, originY) {
 
 // okay, this is epic 
 function findCascadeMatches(previousMatches) {
-    pendingMatches = [];
     // check for a match on every tile that shifted down
     let lowestCellPerColumn = new Array(W).fill(-1);
     for (var i = 0; i < previousMatches.length; i++) {
@@ -387,49 +394,38 @@ function findCascadeMatches(previousMatches) {
             }
         });
     }
+    var matches = [];
     for (var x = 0; x < W; x++) {
         for (var y = lowestCellPerColumn[x]; y >= 0; y--) {
             var match = checkForMatch(x,y);
-            if (match) {
-                for (var i = 0; i < pendingMatches.length - 1; i++) {
-                    var otherMatch = pendingMatches[i];
-                    if (match.hasSameCellsAs(otherMatch)) {
-                        pendingMatches.pop();
-                        break;
-                    } else {
-                        // handle various jointed matches
-                        if (match.startX() == otherMatch.startX()) {
-                            if (match.lengthY > otherMatch.lengthY) {
-                                pendingMatches.splice(i, 1);
-                                break;
-                            } else if (match.lengthY < otherMatch.lengthY) {
-                                // outrageously rare I or U shaped maches should result in 1 match at each joint
-                                pendingMatches.pop();
-                                break;
-                            }
-                        } else if (match.startY() == otherMatch.startY()) {
-                            if (match.lengthX > otherMatch.lengthX) {
-                                pendingMatches.splice(i, 1);
-                                break;
-                            } else if (match.lengthX < otherMatch.lengthX) {
-                                pendingMatches.pop();
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
+            pushIfNotDuplicate(matches, match);
         }
     }
-    if (pendingMatches.length > 0) {
+    if (matches.length > 0) {
         console.log("Cascade matches: ");
-        console.log(pendingMatches);
-        resolveMatches();
+        console.log(matches);
+        resolveMatches(matches);
+        gAnimatingMatches = matches;
         gUpdateScore(score);
         gAnimateGravity().then(() => {
-            findCascadeMatches(pendingMatches);
+            findCascadeMatches(matches);
         });
     }
+}
+
+/**
+ * 
+ * @param {Match[]} matches
+ * @param {Match} match
+ */
+function pushIfNotDuplicate(matches, match) {
+    if (match == null || matches == null) return;
+    for (var m of matches) {
+        if (m.hasSameCellsAs(match)) {
+            return;
+        }
+    }
+    matches.push(match);
 }
 
 /*
@@ -444,16 +440,16 @@ function findCascadeMatches(previousMatches) {
  * Insert random items at the top
  * check for new matches
  */
-function resolveMatches() {
-    for (var i = 0; i < pendingMatches.length; i++) {
-        pendingMatches[i].forEachCell((x, y) => {
+function resolveMatches(matches) {
+    for (var i = 0; i < matches.length; i++) {
+        matches[i].forEachCell((x, y) => {
             setCellColor(x, y, 0);
         });
-        score += pendingMatches[i].score();
+        score += matches[i].score();
     }
 
-    for (var i = 0; i < pendingMatches.length; i++) {
-        var match = pendingMatches[i];
+    for (var i = 0; i < matches.length; i++) {
+        var match = matches[i];
         // start at the bottom and work up
         // note that the end is an exclusive index, so subtract 1
         var startY = match.originY + match.offsetY + match.lengthY - 1;
@@ -528,7 +524,7 @@ function _gravityStep(resolve) {
                 }
             }
         }
-        for (var match of pendingMatches) {
+        for (var match of gAnimatingMatches) {
             if (gGetTileYPixelOffset(match.originX, match.originY) < 0) {
                 gRenderScorePopup(match);
             }
@@ -564,3 +560,28 @@ function init() {
 }
 
 init();
+
+function testEq(a, b, f, expected) {
+    var result = f.call(a, b);
+    var reverse = f.call(b, a);
+    if (result !== reverse || result !== expected) {
+        console.log("Test Failed\n",a,b,f.name,expected);
+    }
+}
+
+function testMatchEquality() {
+    var a = new Match(0,0,0,0,3,1);
+    var b = new Match(1,0,-1,0,3,1);
+    testEq(a, b, Match.prototype.hasSameCellsAs, true);
+    var c = new Match(0,0,0,0,1,3);
+    var d = new Match(0,1,0,-1,1,3);
+    testEq(c, d, Match.prototype.hasSameCellsAs, true);
+    var e = new Match(1,1,-1,-1,3,3);
+    if (e.toStr() != '1,0;0,1;1,1;2,1;1,2;') {
+        console.log('Cross-shape failure', e.toStr());
+    }
+    var L = new Match(0,2,0,-2,3,3);
+    if (L.toStr() != '0,0;0,1;0,2;1,2;2,2;') {
+        console.log('L-shape failure', L.toStr());
+    }
+}

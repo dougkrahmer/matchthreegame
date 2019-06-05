@@ -44,10 +44,8 @@ var canvas = false ? new HTMLCanvasElement() : null;
 var graphics = false ? canvas.getContext('2d') : null;
 
 var gGravityCallbackID = null;
-// all tiles will fall at the same time, 
-// so as long as there is one moving
-// we can increase the acceleration for all of them
-var gGravityAccelerationCounter = 0;
+// start time for acceleration
+var gGravityStartTime = null;
 
 var score = 0;
 var scoreElement;
@@ -231,13 +229,13 @@ function cellMouseUp(x, y) {
                 });
                 {// (debug) this section should only log if something is very wrong
                     var hasEmpties = false;
-                    for (var i = 0; i < 64; i++) {
+                    for (var i = 0; i < W * H; i++) {
                         if (_colors[i] === 0) {
                             hasEmpties = true;
                             break;
                         }
                     } 
-                    if (hasEmpties || _colors.length > 64) {
+                    if (hasEmpties || _colors.length > W * H) {
                         console.log("Previous state: ");
                         console.log(debugTemp)
                         console.log(`Tile 1 (Selected): ${selectedX}, ${selectedY}`);
@@ -474,7 +472,7 @@ function resolveMatches(matches) {
         for (var x = startX; x < endX; x++) {
             var lowestEmptyRow = 0; // by lowest, I mean spacially, think of a spreadsheet
             while (lowestEmptyRow < H && getTileColor(x, lowestEmptyRow) === 0) {
-                setCellColor(x, lowestEmptyRow, getRandomInt(1,7));
+                setCellColor(x, lowestEmptyRow, getRandomInt(1,NUM_COLORS));
                 lowestEmptyRow++;
             }
             lowestEmptyRow -= 1;
@@ -510,15 +508,18 @@ function loadImages() {
 function _gravityStep(resolve) {
     return function(time) {
         var allTilesStationary = true;
-        // TODO use the time instead of a counter, frame rates are arbitrary
-        // console.log(time);
-        gGravityAccelerationCounter += 1;
+        var timeSinceStart;
+        if (gGravityStartTime === null) {
+            gGravityStartTime = time;
+        }
+        timeSinceStart = (time - gGravityStartTime) / 1000; // convert to seconds
+        var speed = timeSinceStart * (G_CELL_SIZE / 2);
         for (var x = 0; x < W; x++) {
             for (var y = 0; y < H; y++) {
                 var offset = gGetTileYPixelOffset(x, y);
                 if (offset < 0) {
                     allTilesStationary = false;
-                    gSetTileYPixelOffset(x, y, Math.min(gGravityAccelerationCounter + offset, 0));
+                    gSetTileYPixelOffset(x, y, Math.min(speed + offset, 0));
                     gRenderCell(x,y);
                     gRenderTile(x,y);
                 }
@@ -529,12 +530,14 @@ function _gravityStep(resolve) {
                 gRenderScorePopup(match);
             }
         }
-        gGravityCallbackID = requestAnimationFrame(_gravityStep(resolve));
         if (allTilesStationary) {
+            // console.log(timeSinceStart);
             cancelAnimationFrame(gGravityCallbackID);
             gGravityCallbackID = null;
-            gGravityAccelerationCounter = 0;
+            gGravityStartTime = null;
             resolve();
+        } else {
+            gGravityCallbackID = requestAnimationFrame(_gravityStep(resolve));
         }
     }
 }

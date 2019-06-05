@@ -321,6 +321,29 @@ class Match {
         return this.toStr() == other.toStr();
     }
 
+    isSupersetOf(other) {
+        if (this.numberOfCells() <= other.numberOfCells()) {
+            return false;
+        }
+        let coversAll = true;
+        other.forEachCell((x, y) => {
+            if (!this.coversCell(x, y)) {
+                coversAll = false;
+            }
+        });
+        return coversAll;
+    }
+
+    coversCell(x, y) {
+        if (this.originX == x) {
+            return y >= (this.originY + this.offsetY) && y < this.originY + this.offsetY + this.lengthY;
+        }
+        if (this.originY == y) {
+            return x >= (this.originX + this.offsetX) && x < this.originX + this.offsetX + this.lengthX;
+        }
+        return false;
+    }
+
     numberOfCells() {
         return (this.lengthX + this.lengthY) - 1;
     }
@@ -420,8 +443,12 @@ function findCascadeMatches(previousMatches) {
  */
 function pushIfNotDuplicate(matches, match) {
     if (match == null || matches == null) return;
-    for (var m of matches) {
-        if (m.hasSameCellsAs(match)) {
+    for (var i = 0; i < matches.length; i++) {
+        if (match.isSupersetOf(matches[i])) {
+            matches.splice(i, 1);
+        } else if (matches[i].isSupersetOf(match)) {
+            return;
+        } else if (match.hasSameCellsAs(matches[i])) {
             return;
         }
     }
@@ -594,6 +621,8 @@ function init() {
 
 init();
 
+// tests that a is "equal" to b
+// and also that b is "equal" to a
 function testEq(a, b, f, expected) {
     var result = f.call(a, b);
     var reverse = f.call(b, a);
@@ -602,13 +631,22 @@ function testEq(a, b, f, expected) {
     }
 }
 
+// just a regular test
+function test(a, b, f, expected) {
+    var result = f.call(a, b);
+    if (result !== expected) {
+        console.log("Test Failed\n",a,b,f.name,expected);
+    }
+}
+
 function testMatchEquality() {
+    const M = Match.prototype;
     var a = new Match(0,0,0,0,3,1);
     var b = new Match(1,0,-1,0,3,1);
-    testEq(a, b, Match.prototype.hasSameCellsAs, true);
+    testEq(a, b, M.hasSameCellsAs, true);
     var c = new Match(0,0,0,0,1,3);
     var d = new Match(0,1,0,-1,1,3);
-    testEq(c, d, Match.prototype.hasSameCellsAs, true);
+    testEq(c, d, M.hasSameCellsAs, true);
     var e = new Match(1,1,-1,-1,3,3);
     if (e.toStr() != '1,0;0,1;1,1;2,1;1,2;') {
         console.log('Cross-shape failure', e.toStr());
@@ -617,4 +655,34 @@ function testMatchEquality() {
     if (L.toStr() != '0,0;0,1;0,2;1,2;2,2;') {
         console.log('L-shape failure', L.toStr());
     }
+    test(new Match(0,0,0,0,3,3), a, M.isSupersetOf, true);
+}
+
+function testI() {
+    _colors[0] = _colors[1] = _colors[2] = _colors[9] = _colors[17] = _colors[16] = _colors[18] = 3;
+    gRenderBoard();
+}
+
+function testSquare() {
+    _colors[0] = _colors[1] = _colors[2] = _colors[8] = _colors[9] =
+     _colors[10] = _colors[17] = _colors[16] = _colors[18] = 3;
+    gRenderBoard();
+}
+
+function testU() {
+    _colors[0] = _colors[2] = _colors[8] =
+     _colors[10] = _colors[17] = _colors[16] = _colors[18] = 3;
+    gRenderBoard();
+}
+
+function testH() {
+    _colors[0] = _colors[2] = _colors[8] = _colors[9] =
+     _colors[10] = _colors[16] = _colors[18] = 3;
+    gRenderBoard();
+}
+
+function testC() {
+    _colors[0] = _colors[1] = _colors[2] = _colors[8] =
+     _colors[17] = _colors[16] = _colors[18] = 3;
+    gRenderBoard();
 }

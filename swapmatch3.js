@@ -37,7 +37,6 @@ var _colors = [];
  */
 var _tileYPixelOffsets = new Array(W * H);
 var selectedX = -1, selectedY = -1;
-var gAnimatingMatches = [];
 
 // this pointless syntax enables type completion in Visual Studio Code
 var canvas = false ? new HTMLCanvasElement() : null;
@@ -218,13 +217,14 @@ function cellMouseUp(x, y) {
                 swapCells(selectedX, selectedY, x, y);
                 gClearSelection();
             } else {
-                var matches = [match1, match2].filter(e => e !== null);
+                let matches = [match1, match2].filter(e => e !== null);
                 resolveMatches(matches);
                 console.log('User Matches:')
                 console.log(matches);
-                gAnimatingMatches = matches;
                 gUpdateScore(score);
-                gAnimateGravity().then(() => {
+                gAnimateFadeOut(matches).then(() => {
+                    return gAnimateGravity(matches);
+                }).then(() => {
                     findCascadeMatches(matches);
                 });
                 {// (debug) this section should only log if something is very wrong
@@ -270,13 +270,14 @@ function cellMouseUp(x, y) {
  * Most commonly only one length will be non-zero. But it can have both, indicating and L or T shaped match.
  */
 class Match {
-    constructor(originX, originY, offsetX, offsetY, lengthX, lengthY) {
+    constructor(originX, originY, offsetX, offsetY, lengthX, lengthY, color) {
         this.originX = originX;
         this.originY = originY;
         this.offsetX = offsetX;
         this.offsetY = offsetY;
         this.lengthX = lengthX;
         this.lengthY = lengthY;
+        this.gColor = color;
     }
 
     startX() {
@@ -375,7 +376,7 @@ function checkForMatch(originX, originY) {
     }
 
     if (lx >= 3 || ly >= 3) {
-        var match = new Match(originX, originY, offx, offy, lx, ly);
+        var match = new Match(originX, originY, offx, offy, lx, ly, originColor);
         return match;
     }
     return null;
@@ -403,9 +404,10 @@ function findCascadeMatches(previousMatches) {
         console.log("Cascade matches: ");
         console.log(matches);
         resolveMatches(matches);
-        gAnimatingMatches = matches;
         gUpdateScore(score);
-        gAnimateGravity().then(() => {
+        gAnimateFadeOut(matches).then(() => {
+            return gAnimateGravity(matches);
+        }).then(() => {
             findCascadeMatches(matches);
         });
     }
@@ -436,7 +438,6 @@ function pushIfNotDuplicate(matches, match) {
  *         swap the empty cell with the row above
  *     move up a row and repeat
  * Insert random items at the top
- * check for new matches
  */
 function resolveMatches(matches) {
     for (var i = 0; i < matches.length; i++) {
@@ -505,7 +506,7 @@ function loadImages() {
 
 // this is seriously incomprehensible
 // derived from https://yeti.co/blog/cool-tricks-with-animating-using-requestanimationframe/
-function _gravityStep(resolve) {
+function _gravityStep(matches, resolve) {
     return function(time) {
         var allTilesStationary = true;
         var timeSinceStart;
@@ -525,7 +526,7 @@ function _gravityStep(resolve) {
                 }
             }
         }
-        for (var match of gAnimatingMatches) {
+        for (var match of matches) {
             if (gGetTileYPixelOffset(match.originX, match.originY) < 0) {
                 gRenderScorePopup(match);
             }
@@ -537,14 +538,43 @@ function _gravityStep(resolve) {
             gGravityStartTime = null;
             resolve();
         } else {
-            gGravityCallbackID = requestAnimationFrame(_gravityStep(resolve));
+            gGravityCallbackID = requestAnimationFrame(_gravityStep(matches, resolve));
         }
     }
 }
 
-function gAnimateGravity() {
+function gAnimateGravity(matches) {
     return new Promise(resolve => {
-        requestAnimationFrame(_gravityStep(resolve));
+        requestAnimationFrame(_gravityStep(matches, resolve));
+    });
+}
+
+function _fadeOutStep(matches, startTime, resolve) {
+    return function(time) {
+        startTime = startTime || time;
+        var timeSinceStart = time - startTime;
+        if (timeSinceStart < 100) {
+            let percent = 1 - timeSinceStart / 100;
+            for (var m of matches) {
+                m.forEachCell((x, y) => {
+                    gEraseCell(x, y);
+                    var c = m.gColor || 1;
+                    graphics.save();
+                    graphics.globalAlpha = percent;
+                    graphics.drawImage(images[c-1], x * G_CELL_SIZE, y * G_CELL_SIZE, G_CELL_SIZE, G_CELL_SIZE);
+                    graphics.restore();
+                });
+            }
+            requestAnimationFrame(_fadeOutStep(matches, startTime, resolve));
+        } else {
+            resolve();
+        }
+    }
+}
+
+function gAnimateFadeOut(matches) {
+    return new Promise(resolve => {
+        requestAnimationFrame(_fadeOutStep(matches, null, resolve));
     });
 }
 

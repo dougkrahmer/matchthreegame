@@ -118,14 +118,24 @@ function swapCells(x1,y1,x2,y2) {
 function createBoard() {
     const size = W*H;
     _colors = new Array(size);
-    for (var i = 0; i < size; i++) {
-        _colors[i] = i % NUM_COLORS + 1;
-        if (i % 8 % 3 == 0) _colors[i] = (_colors[i] + 1) % NUM_COLORS + 1;
+    for (var y = 0; y < H; y++) {
+        for (var x = 0; x < W; x++) {
+            setCellColor(x, y, getRandomInt(1, NUM_COLORS));
+        }
     }
-    // create a test pattern
-    // TEST CASE: the extremely rare + shaped match
-    _colors[32] = _colors[33] = _colors[1] = _colors[9] = _colors[17] = 7;
-    _colors[34] = _colors[25] = _colors[41] = 4;
+    var matches = [];
+    for (var y = 0; y < H; y++) {
+        for (var x = 0; x < W; x++) {
+            pushIfNotDuplicate(matches, checkForMatch(x, y));
+        }
+    }
+    resolveMatches(matches);
+    findCascadeMatches(matches, false);
+    // clear all visual y offsets, okay to use array directly for speed
+    for (var i = 0; i < W * H; i++) {
+        _tileYPixelOffsets[i] = 0;
+    }
+    score = 0;
 }
 
 function gRenderBoard() {
@@ -404,7 +414,7 @@ function checkForMatch(originX, originY) {
 }
 
 // okay, this is epic 
-function findCascadeMatches(previousMatches) {
+function findCascadeMatches(previousMatches, animate = true) {
     // check for a match on every tile that shifted down
     let lowestCellPerColumn = new Array(W).fill(-1);
     for (var i = 0; i < previousMatches.length; i++) {
@@ -425,12 +435,16 @@ function findCascadeMatches(previousMatches) {
         console.log("Cascade matches: ");
         console.log(matches);
         resolveMatches(matches);
-        gUpdateScore(score);
-        gAnimateFadeOut(matches).then(() => {
-            return gAnimateGravity(matches);
-        }).then(() => {
-            findCascadeMatches(matches);
-        });
+        if (animate) {
+            gUpdateScore(score);
+            gAnimateFadeOut(matches).then(() => {
+                return gAnimateGravity(matches);
+            }).then(() => {
+                findCascadeMatches(matches);
+            });
+        } else {
+            findCascadeMatches(matches, false);
+        }
     }
 }
 
@@ -611,6 +625,7 @@ function init() {
     graphics = canvas.getContext('2d');
     createBoard();
     scoreElement = document.getElementById('score');
+    gUpdateScore(score);
     loadImages().then(() => {
         gRenderBoard();
         canvas.onmousedown = canvasMouseDown;
@@ -619,81 +634,3 @@ function init() {
 }
 
 init();
-
-/*
- * VARIOUS TESTS FUNCTIONS FOR EDGE CASES AND BUGS
- * Test coverage here is poor, I only started doing this when I ran into trouble with
- * the de-duplication step, which turned out to be one of the hardest things to write.
- */ 
-
-// tests that a is "equal" to b
-// and also that b is "equal" to a
-function testEq(a, b, f, expected) {
-    var result = f.call(a, b);
-    var reverse = f.call(b, a);
-    if (result !== reverse || result !== expected) {
-        console.log("Test Failed\n",a,b,f.name,expected);
-    }
-}
-
-// just a regular test
-function test(a, b, f, expected) {
-    var result = f.call(a, b);
-    if (result !== expected) {
-        console.log("Test Failed\n",a,b,f.name,expected);
-    }
-}
-
-function testMatchEquality() {
-    const M = Match.prototype;
-    var a = new Match(0,0,0,0,3,1);
-    var b = new Match(1,0,-1,0,3,1);
-    testEq(a, b, M.hasSameCellsAs, true);
-    var c = new Match(0,0,0,0,1,3);
-    var d = new Match(0,1,0,-1,1,3);
-    testEq(c, d, M.hasSameCellsAs, true);
-    var e = new Match(1,1,-1,-1,3,3);
-    if (e.toStr() != '1,0;0,1;1,1;2,1;1,2;') {
-        console.log('Cross-shape failure', e.toStr());
-    }
-    var L = new Match(0,2,0,-2,3,3);
-    if (L.toStr() != '0,0;0,1;0,2;1,2;2,2;') {
-        console.log('L-shape failure', L.toStr());
-    }
-    test(new Match(0,0,0,0,3,3), a, M.isSupersetOf, true);
-}
-
-function testI() {
-    _colors[0] = _colors[1] = _colors[2] = _colors[9] = _colors[17] = _colors[16] = _colors[18] = 3;
-    gRenderBoard();
-}
-
-function testSquare() {
-    _colors[0] = _colors[1] = _colors[2] = _colors[8] = _colors[9] =
-     _colors[10] = _colors[17] = _colors[16] = _colors[18] = 3;
-    gRenderBoard();
-}
-
-function testU() {
-    _colors[0] = _colors[2] = _colors[8] =
-     _colors[10] = _colors[17] = _colors[16] = _colors[18] = 3;
-    gRenderBoard();
-}
-
-function testH() {
-    _colors[0] = _colors[2] = _colors[8] = _colors[9] =
-     _colors[10] = _colors[16] = _colors[18] = 3;
-    gRenderBoard();
-}
-
-function testC() {
-    _colors[0] = _colors[1] = _colors[2] = _colors[8] =
-     _colors[17] = _colors[16] = _colors[18] = 3;
-    gRenderBoard();
-}
-
-function testDoubleHorizontalMatch() {
-    _colors[56] = _colors[49] = _colors[58] = 1;
-    _colors[48] = _colors[57] = _colors[50] = 2;
-    gRenderBoard();
-}

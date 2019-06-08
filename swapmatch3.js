@@ -525,6 +525,45 @@ function resolveMatches(matches) {
     }
 }
 
+function inBounds(x, y) {
+    return (x >= 0 && y >= 0 && x < W && y < H);
+}
+
+function isPossibleMatch(x, y) {
+    var originColor = getTileColor(x, y);
+    // first, check for corners
+    // they are a predicate of type A matches,
+    // and if there are two adjacent corners, it is a type B match
+    const cornerOrder = [[1,-1],[1,1],[-1,1],[-1,-1]]; // this is clockwise
+    var corners = [];
+    var previousCornerMatched = false;
+    for (var i = 0; i < 4; i++) {
+        const d = cornerOrder[i];
+        var v = x+d[0], w = y+d[1];
+        if (!inBounds(v,w)) {
+            corners[i] = false;
+            continue;
+        }
+        corners[i] = originColor == getTileColor(v,w);
+        if (corners[i]) {
+            // roll type B checking into this loop
+            if (previousCornerMatched) return true;
+            // check for type A
+            var t = v + d[0], u = w + d[1];
+            if (inBounds(t,w) && getTileColor(t, w) == originColor) return true;
+            if (inBounds(v,u) && getTileColor(v, u) == originColor) return true;
+        }
+        previousCornerMatched = corners[i];
+    }
+    if (corners[0] && corners[3]) return true; // the loop misses this case
+    // check for type C
+    if (inBounds(x + 3, y) && getTileColor(x + 2, y) == originColor && getTileColor(x + 3, y) == originColor) return true;
+    if (inBounds(x - 3, y) && getTileColor(x - 2, y) == originColor && getTileColor(x - 3, y) == originColor) return true;
+    if (inBounds(x, y + 3) && getTileColor(x, y + 2) == originColor && getTileColor(x, y + 3) == originColor) return true;
+    if (inBounds(x, y - 3) && getTileColor(x, y - 2) == originColor && getTileColor(x, y - 3) == originColor) return true;
+    return false;
+}
+
 function getRandomInt(min, max) {
     min = Math.ceil(min);
     max = Math.floor(max);

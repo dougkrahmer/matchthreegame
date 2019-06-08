@@ -85,7 +85,14 @@ function testCascadePlusShape() {
     gRenderBoard();
 }
 
+function expect(expected, f, ...args) {
+    if (expected !== f(...args)) {
+        console.log('Test Failed', f.name, args);
+    }
+}
+
 function testMoveDetection() {
+    // some random board that had all three match types
     _colors = [
         2, 5, 5, 1, 5, 1, 1, 3, 
         4, 6, 5, 6, 4, 1, 7, 5, 
@@ -95,6 +102,14 @@ function testMoveDetection() {
         1, 6, 4, 4, 7, 6, 7, 3, 
         7, 7, 1, 5, 3, 6, 3, 2, 
         3, 6, 7, 2, 4, 7, 4, 4];
+    expect(true, isPossibleMatch,4,0);
+    expect(true, isPossibleMatch,2,3);
+    expect(true, isPossibleMatch,3,2);
+    expect(true, isPossibleMatch,5,4);
+    // test edge case at end of B loop
+    _colors[44] = _colors[46] = _colors[20] = 2;
+    _colors[28] = _colors[30] = 7;
+    expect(true, isPossibleMatch,5,4);
 }
 
 function testMovesRemainingDeadBoard() {
@@ -107,10 +122,18 @@ function testMovesRemainingDeadBoard() {
         7,4,1,6,7,4,5,7,
         6,4,3,1,6,7,4,1,
         7,7,5,5,2,3,3,6];
+    for (var x = 0; x < W; x++) {
+        for (var y = 0; y < H; y++) {
+            if (isPossibleMatch(x, y)) {
+                console.log('Test Failed', x, y);
+                return;
+            }
+        }
+    }
 }
 
-function printFormattedColorArray() {
-    var str = _colors.toString();
+function printFormattedColorArray(array = _colors) {
+    var str = array.toString();
     var subStrings = []
     for (var i = 0; i < (W * H) * 2; i += W * 2) {
         subStrings.push(str.substr(i, W * 2));
@@ -118,4 +141,29 @@ function printFormattedColorArray() {
     var retval = '[\n' + subStrings.join('\n') + ']';
     // console.log(retval); returning will print in chrome console anyway
     return retval;
+}
+
+function testOddsOfGettingUnplayableStart(count = 10000) {
+    var fails = 0;
+    var unplayables = [];
+    for (var i = 0; i < count; i++) {
+        createBoard();
+        var moveFound = false;
+        checkForMatch: for (var x = 0; x < W; x++) {
+            for (var y = 0; y < H; y++) {
+                if (isPossibleMatch(x, y)) {
+                    moveFound = true;
+                    break checkForMatch;
+                }
+            }
+        }
+        if (!moveFound) {
+            fails++;
+            unplayables.push(_colors.slice());
+        }
+    }
+    console.log(fails + ' out of ' + count + ' starts were unplayable');
+    for (var board of unplayables) {
+        console.log(printFormattedColorArray(board));
+    }
 }
